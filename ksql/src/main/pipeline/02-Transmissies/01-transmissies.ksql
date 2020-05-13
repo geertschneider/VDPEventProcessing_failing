@@ -1,0 +1,253 @@
+create stream STR_RAWTRANSMISSIEEVENTS WITH (VALUE_FORMAT='AVRO',PARTITIONS=6,KAFKA_TOPIC='STR_RAWTRANSMISSIEEVENTS')
+as
+select 
+    case 
+        WHEN eventType = 'transmissie/TransmissieVerstuurd' THEN cast (EXTRACTJSONFIELD(payload,'$.transmissieInformatie.transmissieId') as string)
+        ELSE cast (EXTRACTJSONFIELD(payload,'$.transmissieId') as string)
+    END  as transmissieIdKey,
+    * from STR_INTEGRATIONEVENTS_AVRO
+where eventType = 'transmissie/TransmissieOpgestart' or eventType = 'transmissie/TransmissieVerstuurd' or eventType = 'controledossier/transmissieBeslist'
+PARTITION BY transmissieIdKey;
+
+ 
+
+create stream STR_NEWTRANSMISSIEEVENTS
+(
+    eventIdentifier string,
+    eventType string,
+    transmissieIdKey string,
+    TransmissieID int,
+    IKL int,
+    TransmissieType string,
+    Toestand string,
+    Motivatie string,
+    OpgestartOp bigint,
+    ContactID string,
+    Ondertekend int,
+    UITVOERDER string,
+    TIJDSTIP bigint,
+    BESLISSING string,
+    SANCTIEMAAT string,
+    REDEN string,
+    BESLISSINGSMOTIVATIE string,
+    BESLISSINGSDATUM bigint,
+    VERHOORDER string,
+    BeslissingsLijnen string,
+    DTM_CRE bigint,
+    USR_CRE string,
+    DTM_LW bigint,
+    USR_LW string
+)
+with (
+    VALUE_FORMAT = 'AVRO',
+    KAFKA_TOPIC='STR_NEWTRANSMISSIEEVENTS',
+    KEY='transmissieIdKey',
+    PARTITIONS = 6
+);
+
+create stream STR_TRANSMISSIEEVENTS
+(
+    eventIdentifier string,
+    eventType string,
+    transmissieIdKey string,
+    TransmissieID int,
+    IKL int,
+    TransmissieType string,
+    Toestand string,
+    Motivatie string,
+    OpgestartOp bigint,
+    ContactID string,
+    Ondertekend int,
+    UITVOERDER string,
+    TIJDSTIP bigint,
+    BESLISSING string,
+    SANCTIEMAAT string,
+    REDEN string,
+    BESLISSINGSMOTIVATIE string,
+    BESLISSINGSDATUM bigint,
+    VERHOORDER string,
+    BeslissingsLijnen string,
+    DTM_CRE bigint,
+    USR_CRE string,
+    DTM_LW bigint,
+    USR_LW string
+)
+with (
+    VALUE_FORMAT = 'AVRO',
+    KAFKA_TOPIC='OUT_TRANSMISSIEEVENTS',
+    KEY='transmissieIdKey',
+    PARTITIONS = 6
+);
+
+create table TBL_TRANSMISSIEEVENTS
+(
+    eventIdentifier string,
+    eventType string,
+    transmissieIdKey string,
+    TransmissieID int,
+    IKL int,
+    TransmissieType string,
+    Toestand string,
+    Motivatie string,
+    OpgestartOp bigint,
+    ContactID string,
+    Ondertekend int,
+    UITVOERDER string,
+    TIJDSTIP bigint,
+    BESLISSING string,
+    SANCTIEMAAT string,
+    REDEN string,
+    BESLISSINGSMOTIVATIE string,
+    BESLISSINGSDATUM bigint,
+    VERHOORDER string,
+    BeslissingsLijnen string,
+    DTM_CRE bigint,
+    USR_CRE string,
+    DTM_LW bigint,
+    USR_LW string
+)
+WITH (VALUE_FORMAT='AVRO',KAFKA_TOPIC='OUT_TRANSMISSIEEVENTS',key='transmissieIdKey',PARTITIONS=6);
+
+insert into STR_NEWTRANSMISSIEEVENTS
+select
+    eventIdentifier,
+    eventType,
+     case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN cast (EXTRACTJSONFIELD(payload,'$.transmissieId') as string)
+        when raw.eventType = 'transmissie/TransmissieVerstuurd' THEN cast (EXTRACTJSONFIELD(payload,'$.transmissieInformatie.transmissieId') as string)
+        when raw.eventType = 'controledossier/transmissieBeslist' THEN cast (EXTRACTJSONFIELD(payload,'$.transmissieId') as string)
+        END as transmissieIdKey,
+     case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN cast (EXTRACTJSONFIELD(payload,'$.transmissieId') as INT)
+        when raw.eventType = 'transmissie/TransmissieVerstuurd' THEN cast (EXTRACTJSONFIELD(payload,'$.transmissieInformatie.transmissieId') as INT)
+        when raw.eventType = 'controledossier/transmissieBeslist' THEN cast (EXTRACTJSONFIELD(payload,'$.transmissieId') as INT)
+    END as TransmissieID,
+    cast (EXTRACTJSONFIELD(payload,'$.ikl') as INT) as IKL,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN EXTRACTJSONFIELD(payload,'$.transmissieType')
+        when raw.eventType = 'transmissie/TransmissieVerstuurd' THEN EXTRACTJSONFIELD(payload,'$.transmissieInformatie.type.code')
+        when raw.eventType = 'controledossier/transmissieBeslist' THEN EXTRACTJSONFIELD(payload,'$.beslissing.transmissie.type')
+    END as TransmissieType,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN 'OPGESTART'
+        when raw.eventType = 'transmissie/TransmissieVerstuurd' THEN 'VERSTUURD'
+        when raw.eventType = 'controledossier/transmissieBeslist' THEN 'BESLIST'
+    END as Toestand,
+    case
+        when raw.eventType = 'transmissie/TransmissieVerstuurd' THEN EXTRACTJSONFIELD(raw.payload,'$.transmissieInformatie.motivatie')
+        ELSE cast(null as string)
+    END as Motivatie,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN  STRINGTOTIMESTAMP( EXTRACTJSONFIELD(payload,'$.opgestartOp'),'yyyy-MM-dd''T''HH:mm:ss.SSSX')*1000
+        ELSE cast(null as bigint)
+    END as OpgestartOp,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN  EXTRACTJSONFIELD(payload,'$.externeAfspraakReferentie')
+        ELSE cast(null as string)
+    END as ContactID,
+    case
+        when raw.eventType = 'transmissie/TransmissieVerstuurd' THEN case when EXTRACTJSONFIELD(raw.payload,'$.transmissieInformatie.ondertekend') = 'false' then 0 else 1 end
+        ELSE cast(null as int)
+    END as Ondertekend,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN cast(null as string)
+        when raw.eventType = 'transmissie/TransmissieVerstuurd' THEN EXTRACTJSONFIELD(raw.payload,'$.bemiddelaar.naam')
+        when raw.eventType = 'controledossier/transmissieBeslist' THEN 'de controledienst'
+    END as UITVOERDER,
+    STRINGTOTIMESTAMP (EXTRACTJSONFIELD(payload,'$.creationTimestamp'),'yyyy-MM-dd''T''HH:mm:ss.SSSX')*1000 as TIJDSTIP,
+    cast(null as string) as BESLISSING,
+    cast(null as string) as SANCTIEMAAT,
+    cast(null as string) as REDEN,
+    cast(null as string) as BESLISSINGSMOTIVATIE,
+    case
+        when raw.eventType = 'controledossier/transmissieBeslist' THEN STRINGTOTIMESTAMP (CONCAT(EXTRACTJSONFIELD(raw.payload,'$.beslissing.beslissingsdatum'), 'T00:00:00.000Z'), 'yyyy-MM-dd''T''HH:mm:ss.SSSX' )*1000
+        else cast(null as bigint)
+    END  as BESLISSINGSDATUM,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN cast(null as string)
+        ELSE 'de controledienst'
+    END as VERHOORDER,
+    case
+        when raw.eventType = 'controledossier/transmissieBeslist' THEN EXTRACTJSONFIELD(payload,'$.beslissing.beslissingslijnen')
+        ELSE cast(null as string)
+    END as BeslissingsLijnen ,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN STRINGTOTIMESTAMP (EXTRACTJSONFIELD(payload,'$.creationTimestamp'),'yyyy-MM-dd''T''HH:mm:ss.SSSX' )*1000
+        else cast(null as bigint)
+    end  as DTM_CRE,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN EXTRACTJSONFIELD(payload,'$.gebruikerUid')
+        ELSE CAST(NULL AS STRING)
+    end as USR_CRE,
+    STRINGTOTIMESTAMP (EXTRACTJSONFIELD(payload,'$.creationTimestamp'),'yyyy-MM-dd''T''HH:mm:ss.SSSX' )*1000 as DTM_LW,
+    case
+        when raw.eventType = 'transmissie/TransmissieOpgestart' THEN EXTRACTJSONFIELD(raw.payload,'$.gebruikerUid')
+        when raw.eventType = 'transmissie/TransmissieVerstuurd' THEN EXTRACTJSONFIELD(raw.payload,'$.bemiddelaar.uid')
+        when raw.eventType = 'controledossier/transmissieBeslist' THEN EXTRACTJSONFIELD(raw.payload,'$.beslissing.beslissingsnemerId')
+    END as USR_LW
+from STR_RAWTRANSMISSIEEVENTS raw
+partition by transmissieIdKey;
+
+
+insert into STR_TRANSMISSIEEVENTS
+select
+    newEvent.eventIdentifier as eventIdentifier,
+    newEvent.eventType as eventType,
+    newEvent.transmissieIdKey transmissieIdKey,
+    newEvent.TransmissieID as TransmissieID,
+    newEvent.IKL as IKL,
+    newEvent.TransmissieType as TransmissieType,
+    newEvent.Toestand as Toestand,
+    case
+        when not newEvent.Motivatie is null then newEvent.Motivatie
+        else tbl.Motivatie
+    END as Motivatie,
+    case
+        when not newEvent.OpgestartOp is null then newEvent.OpgestartOp
+        else tbl.OpgestartOp
+    END as OpgestartOp,
+    case
+        when not newEvent.ContactID is null then newEvent.ContactID
+        ELSE tbl.ContactID
+    END as ContactID,
+    case
+        when not newEvent.Ondertekend is null then newEvent.Ondertekend
+        ELSE tbl.Ondertekend
+    END as Ondertekend,
+    case
+        when not newEvent.UITVOERDER is null then newEvent.UITVOERDER
+        ELSE tbl.UITVOERDER
+    END as UITVOERDER,
+    case
+        when not newEvent.TIJDSTIP is null then newEvent.TIJDSTIP
+        ELSE tbl.TIJDSTIP
+    END as TIJDSTIP,
+    cast(null as string) as BESLISSING,
+    cast(null as string) as SANCTIEMAAT,
+    cast(null as string) as REDEN,
+    cast(null as string) as BESLISSINGSMOTIVATIE,
+    case
+        when not newEvent.BESLISSINGSDATUM is null then newEvent.BESLISSINGSDATUM
+        ELSE tbl.BESLISSINGSDATUM
+    END as BESLISSINGSDATUM,
+    case
+        when not newEvent.VERHOORDER is null then newEvent.VERHOORDER
+        ELSE tbl.VERHOORDER
+    END as VERHOORDER,
+    case
+        when not newEvent.BeslissingsLijnen is null then newEvent.BeslissingsLijnen
+        ELSE tbl.BeslissingsLijnen
+    END as BeslissingsLijnen,
+    case
+        when not newEvent.DTM_CRE is null then newEvent.DTM_CRE
+        ELSE tbl.DTM_CRE
+    END as DTM_CRE,
+    case
+        when not newEvent.USR_CRE is null then newEvent.USR_CRE
+        ELSE tbl.USR_CRE
+    END as USR_CRE ,
+    newEvent.DTM_LW as DTM_LW,
+    newEvent.USR_LW as USR_LW
+from STR_NEWTRANSMISSIEEVENTS newEvent
+left join TBL_TRANSMISSIEEVENTS tbl on tbl.transmissieIdKey = newEvent.transmissieIdKey
+partition by transmissieIdKey;

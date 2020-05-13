@@ -1,0 +1,165 @@
+create table TBL_AFSPRAAK
+(
+    afspraakID varchar,
+    ikl varchar,
+    type varchar,
+    onderwerp varchar,
+    datum int,
+    uur bigint,
+    afwezigheid_reden varchar,
+    dtm_afwezigheid_registratie bigint,
+    geldigheidcode varchar,
+    dtm_cre bigint,
+    dtm_lw bigint
+)
+with (
+    value_format='AVRO',
+    kafka_topic='OUT_AFSPRAAK',
+    KEY='afspraakID',
+    partitions='6'
+);
+
+create stream STR_AFSPRAAK_OUT
+(
+    eventIdentifier varchar,
+    eventType varchar,
+    afspraakID varchar,
+    ikl varchar,
+    type varchar,
+    onderwerp varchar,
+    datum int,
+    uur bigint,
+    afwezigheid_reden varchar,
+    dtm_afwezigheid_registratie bigint,
+    geldigheidcode varchar,
+    dtm_cre bigint,
+    dtm_lw bigint
+)
+with (
+    value_format='AVRO',
+    kafka_topic='OUT_AFSPRAAK',
+    KEY='afspraakID',
+    partitions='6'
+);
+
+
+create stream STR_AFSPRAAK_INPUT
+(
+    eventIdentifier varchar,
+    eventType varchar,
+    afspraakID varchar,
+    ikl varchar,
+    type varchar,
+    onderwerp varchar,
+    datum int,
+    uur bigint,
+    afwezigheid_reden varchar,
+    dtm_afwezigheid_registratie bigint,
+    geldigheidcode varchar,
+    dtm_cre bigint,
+    dtm_lw bigint
+)
+with (
+    value_format='AVRO',
+    kafka_topic='STR_AFSPRAAK_INPUT',
+    KEY='afspraakID',
+    partitions='6'
+);
+
+
+
+INSERT INTO STR_AFSPRAAK_INPUT
+    select
+        newEvent.eventIdentifier as eventIdentifier,
+        newEvent.eventType as eventtype,
+        case 
+            WHEN eventType = 'inos/InschattingsGesprekAlsAfspraakGepland' THEN EXTRACTJSONFIELD(newEvent.payload,'$.inschattingsGesprekId')
+            ELSE EXTRACTJSONFIELD(newEvent.payload,'$.opvolgGesprekId')
+        END as afspraakID,
+        EXTRACTJSONFIELD(newEvent.payload,'$.ikl') as ikl,
+        case
+            when newEvent.eventtype = 'inos/InschattingsGesprekAlsAfspraakGepland' THEN 'InschattingsGesprekAlsAfspraak'
+            when newEvent.eventtype = 'inos/OpvolgGesprekAlsAfspraakGepland' THEN 'OpvolgGesprekAlsAfspraak'
+        END as type,
+        EXTRACTJSONFIELD(newEvent.payload,'$.onderwerp') as onderwerp,
+        STRINGTODATE(EXTRACTJSONFIELD(newEvent.payload,'$.deadline'),'yyyy-MM-dd')   as datum,
+        STRINGTOTIMESTAMP(EXTRACTJSONFIELD(newEvent.payload,'$.deadline') + 'T' + EXTRACTJSONFIELD(newEvent.payload,'$.van') + ' CET','yyyy-MM-dd''T''HH:mm:SS z') * 1000 as uur,
+        cast(null as string) as afwezigheid_reden,
+        cast(null as bigint) as dtm_afwezigheid_registratie,
+        cast(null as string) as geldigheidcode,
+        (newEvent.EVENTTIME) * 1000 as dtm_cre,
+        (newEvent.EVENTTIME) * 1000 as dtm_lw
+    from STR_INTEGRATIONEVENTS_AVRO newEvent
+    where
+    newEvent.eventtype = 'inos/InschattingsGesprekAlsAfspraakGepland'
+    or newEvent.eventtype = 'inos/OpvolgGesprekAlsAfspraakGepland'
+partition by afspraakID;
+
+INSERT INTO STR_AFSPRAAK_INPUT
+select
+    newEvent.eventIdentifier,
+    newEvent.eventType as eventtype,
+    case 
+        WHEN eventType = 'inos/InschattingsGesprekAlsAfspraakAfwezigAfgewerkt' THEN EXTRACTJSONFIELD(newEvent.payload,'$.inschattingsGesprekId')
+        ELSE EXTRACTJSONFIELD(newEvent.payload,'$.opvolgGesprekId')
+    END as afspraakID,
+    EXTRACTJSONFIELD(payload,'$.ikl') as ikl,
+    cast(null as string) as type,
+    cast(null as string) as onderwerp,
+    cast(null as int) as datum,
+    cast(null as bigint) as uur,
+    EXTRACTJSONFIELD(payload,'$.reden.code') as afwezigheid_reden,
+    newEvent.EVENTTIME * 1000 as dtm_afwezigheid_registratie,
+    EXTRACTJSONFIELD(newEvent.payload,'$.geldigheid.code') as geldigheidcode,
+    cast(null as bigint) as dtm_cre,
+    newEvent.EVENTTIME  * 1000 as dtm_lw
+from STR_INTEGRATIONEVENTS_AVRO newEvent
+where
+newEvent.eventtype = 'inos/InschattingsGesprekAlsAfspraakAfwezigAfgewerkt'
+or newEvent.eventtype = 'inos/OpvolgGesprekAlsAfspraakAfwezigAfgewerkt'
+partition by afspraakID;
+
+
+
+    INSERT INTO STR_AFSPRAAK_OUT
+    select
+        newEvent.eventIdentifier as eventIdentifier,
+        newEvent.eventType as eventtype,
+        newEvent.afspraakID as afspraakID,
+        newEvent.ikl as ikl,
+        newEvent.type as type,
+        newEvent.onderwerp as onderwerp,
+        newEvent.datum as datum,
+        newEvent.uur as uur,
+        prev.afwezigheid_reden as afwezigheid_reden,
+        prev.dtm_afwezigheid_registratie as dtm_afwezigheid_registratie,
+        newEvent.geldigheidcode as geldigheidcode,
+        newEvent.dtm_cre as dtm_cre,
+        newEvent.dtm_cre as dtm_lw
+    from STR_AFSPRAAK_INPUT newEvent
+    left join TBL_AFSPRAAK prev on prev.afspraakID = newEvent.afspraakID
+    where newEvent.eventtype = 'inos/InschattingsGesprekAlsAfspraakGepland'
+    or newEvent.eventtype = 'inos/OpvolgGesprekAlsAfspraakGepland'
+    partition by afspraakID;
+
+
+    INSERT INTO STR_AFSPRAAK_OUT
+    select
+        newEvent.eventIdentifier,
+        newEvent.eventType as eventtype,
+        newEvent.afspraakID as afspraakID,
+        newEvent.ikl as ikl,
+        prev.type as type,
+        prev.onderwerp as onderwerp,
+        prev.datum as datum,
+        prev.uur as uur,
+        newEvent.afwezigheid_reden as afwezigheid_reden,
+        newEvent.dtm_afwezigheid_registratie as dtm_afwezigheid_registratie,
+        newEvent.geldigheidcode as geldigheidcode,
+        prev.dtm_cre as dtm_cre,
+        newEvent.dtm_lw as dtm_lw
+    from STR_AFSPRAAK_INPUT newEvent
+    left join TBL_AFSPRAAK prev on prev.afspraakID = newEvent.afspraakID
+    where newEvent.eventtype = 'inos/InschattingsGesprekAlsAfspraakAfwezigAfgewerkt'
+    or newEvent.eventtype = 'inos/OpvolgGesprekAlsAfspraakAfwezigAfgewerkt'
+    partition by afspraakID;

@@ -1,0 +1,32 @@
+create table SLPlanningPivot
+(
+    eventIdentifier varchar not null,
+    trajectID varchar  not null,
+    typeGesprek varchar not null,
+    IKL int  not null,
+    eventName varchar not null,
+    eventTime timestamp not null,
+    typeInschattingsgesprek varchar,
+    startPeriod timestamp not null,
+    endPeriod timestamp not null,
+    vdp_insert_date timestamp not null,
+    PRIMARY KEY(eventIdentifier,trajectID,typeGesprek)
+)
+PARTITION BY HASH PARTITIONS 16
+STORED AS KUDU
+
+create table SLPlanningPivotWeekly
+(
+    eventIdentifier varchar not null,
+    trajectID varchar  not null,
+    typeGesprek varchar not null,
+    IKL int  not null,
+    eventName varchar not null,
+    eventTime timestamp not null,
+    typeInschattingsgesprek varchar,
+    weekstart timestamp not null,
+    vdp_insert_date timestamp not null,
+    PRIMARY KEY(eventIdentifier,trajectID,typeGesprek)
+)
+PARTITION BY HASH PARTITIONS 16
+STORED AS KUDU

@@ -1,0 +1,52 @@
+plugins {
+    id 'groovy'
+    id "com.redpillanalytics.gradle-confluent" version "1.1.22"
+    id "maven-publish"
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+publishing {
+    repositories {
+        mavenLocal()
+    }
+}
+
+tasks.register("Inos",com.redpillanalytics.gradle.tasks.PipelineExecuteTask){
+    group = "KSQL Pipelines"
+    description="Deploys the inos pipeline"
+    pipelinePath = "src/main/pipeline/02-Inos"
+    fromBeginning=true
+}
+
+tasks.register("DeployLDV",com.redpillanalytics.gradle.tasks.PipelineExecuteTask){
+    group = "KSQL Pipelines"
+    description="Deploys the inos pipeline"
+    pipelinePath = "src/main/pipeline/"
+    fromBeginning=true
+    restUrl = 'http://kafka01-mlb1ldv.ops.vdab.be:8088'
+}
+
+
+tasks.register("INOS_LDV",com.redpillanalytics.gradle.tasks.PipelineExecuteTask){
+    group = "KSQL Pipelines"
+    description="Deploys the inos pipeline"
+    pipelinePath = "src/main/pipeline/02-Inos"
+    fromBeginning=true
+    restUrl = 'http://kafka01-mlb1ldv.ops.vdab.be:8088'
+}
+
+
+
+dependencies {
+
+    compile 'org.codehaus.groovy:groovy-all:3.0.3'
+
+
+    compile group: 'org.apache.kafka', name: 'kafka-clients', version: '2.5.0'
+    compile group:'org.apache.kafka', name: 'kafka_2.13', version: '2.5.0'
+}

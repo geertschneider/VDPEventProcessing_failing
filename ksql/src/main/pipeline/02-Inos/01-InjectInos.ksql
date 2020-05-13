@@ -1,0 +1,23 @@
+--@DeleteTopic
+CREATE STREAM STR_INOSEVENTS_RAW
+WITH (value_format='JSON',partitions=6) AS
+select
+    extractjsonfield(payload,'$.ikl') as IKLKey,
+    cast(extractjsonfield(payload,'$.ikl') as INT) as IKL,
+    eventIdentifier,
+    eventType,
+    substring(eventType,6) as eventName,
+    extractjsonfield(payload,'$.eersteInschattingId') eersteInschattingId,
+    extractjsonfield(payload,'$.opvolgingId') opvolgingId,
+     case
+            when extractjsonfield(payload,'$.eersteInschattingId')  is null then
+                extractjsonfield(payload,'$.opvolgingId')
+            else
+                extractjsonfield(payload,'$.eersteInschattingId')
+        end as trajectID,
+    eventTime as eventTime,
+    payload as payload
+from STR_INTEGRATIONEVENTS_AVRO
+where rowkey='inos'
+partition by extractjsonfield(payload,'$.ikl');
+

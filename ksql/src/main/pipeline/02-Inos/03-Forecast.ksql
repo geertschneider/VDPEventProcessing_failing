@@ -1,0 +1,91 @@
+
+--@DeleteTopic
+create stream STR_INOS_FORECASTRESULT_RAW
+WITH (value_format='JSON') AS
+SELECT
+    IKLKey,
+    eventIdentifier,
+    case
+        when eersteInschattingId is null then
+            opvolgingId
+        else
+            eersteInschattingId
+    end as trajectID,
+    IKL,
+    eventname,
+    eventTime
+from STR_INOSEVENTS_RAW;
+
+--@DeleteTopic
+create stream STR_INOS_FORECASTRESULT_ALL
+WITH (value_format='JSON',PARTITIONS=6) AS
+SELECT
+    IKLKey as IKLKey,
+    eventIdentifier,
+    trajectID,
+    IKL,
+    eventname,
+    eventTime,
+    forecastgesprekken_weeks(eventName,eventTime) as overlappingWeeks,
+    forecastgesprekken_period(eventName,eventTime) as StartEndPeriods
+from STR_INOS_FORECASTRESULT_RAW
+partition by IKLKey;
+
+--START WEEKLY FORECAST--
+
+create stream STR_INOS_FORECASTRESULT_WEEKS_PIVOT with(VALUE_FORMAT='JSON',KAFKA_TOPIC='OUT_SLPLANNING_FORECASTINGBYWEEK',partitions=6)
+as
+select
+ IKLKey, eventIdentifier,trajectID,IKL,eventName,eventTime,
+ 'Inschattingsgesprek' as TypeGesprek,'' as TypeInschattingsGesprek,
+ overlappingWeeks['IG'] as WeekStart
+from STR_INOS_FORECASTRESULT_ALL where not overlappingWeeks is null
+partition by IKLKey;
+
+insert into STR_INOS_FORECASTRESULT_WEEKS_PIVOT
+select
+ IKLKey, eventIdentifier,trajectID,IKL,eventName,eventTime,
+ 'Opvolgingsgesprek1' as TypeGesprek,'' as TypeInschattingsGesprek,
+ overlappingWeeks['OG1'] as WeekStart
+from STR_INOS_FORECASTRESULT_ALL where not overlappingWeeks is null
+partition by IKLKey;
+
+
+insert into STR_INOS_FORECASTRESULT_WEEKS_PIVOT
+select
+ IKLKey, eventIdentifier,trajectID,IKL,eventName,eventTime,
+ 'Opvolgingsgesprek2' as TypeGesprek,'' as TypeInschattingsGesprek,
+ overlappingWeeks['OG2'] as WeekStart
+from STR_INOS_FORECASTRESULT_ALL where not overlappingWeeks is null
+partition by IKLKey;
+
+--END WEEKLY FORECAST--
+
+--START DAY PREDICTIONS--
+create stream STR_INOS_FORECASTRESULT_DAY_PIVOT with(VALUE_FORMAT='JSON',KAFKA_TOPIC='OUT_SLPLANNING_FORECASTINGBYDAY',partitions=6)
+as
+select
+   IKLKey, eventIdentifier,trajectID,IKL,eventName,eventTime,
+   'Inschattingsgesprek' as TypeGesprek,'' as TypeInschattingsGesprek,
+   STARTENDPERIODS['IG']['BeginPeriod'] as Start
+  from STR_INOS_FORECASTRESULT_ALL where not overlappingWeeks is null
+  partition by IKLKey;
+
+insert into STR_INOS_FORECASTRESULT_DAY_PIVOT
+select
+   IKLKey, eventIdentifier,trajectID,IKL,eventName,eventTime,
+   'Opvolgingsgesprek1' as TypeGesprek,'' as TypeInschattingsGesprek,
+   STARTENDPERIODS['OG1']['BeginPeriod'] as Start
+  from STR_INOS_FORECASTRESULT_ALL where not overlappingWeeks is null
+  partition by IKLKey;
+
+insert into STR_INOS_FORECASTRESULT_DAY_PIVOT
+select
+   IKLKey, eventIdentifier,trajectID,IKL,eventName,eventTime,
+   'Opvolgingsgesprek2' as TypeGesprek,'' as TypeInschattingsGesprek,
+   STARTENDPERIODS['OG2']['BeginPeriod'] as Start
+  from STR_INOS_FORECASTRESULT_ALL where not overlappingWeeks is null
+  partition by IKLKey;
+
+
+--END DAY PREDICTIONS--

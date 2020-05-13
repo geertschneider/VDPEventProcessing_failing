@@ -1,0 +1,12 @@
+create table InosStates
+(
+    eventIdentifier varchar not null,
+    IKL int not null,
+    eventName varchar not null,
+    startPeriod timestamp not null,
+    endPeriod timestamp not null,
+    vdp_insert_date timestamp,
+    PRIMARY KEY(IKL,eventIdentifier)
+)
+PARTITION BY HASH PARTITIONS 16
+STORED AS KUDU

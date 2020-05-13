@@ -1,0 +1,26 @@
+--@DeleteTopic
+create stream STR_INTEGRATIONEVENTS_JSON(
+    eventIdentifier varchar,
+    eventType varchar,
+    revision varchar,
+    payload varchar,
+    timeStamp varchar
+    )
+with (kafka_topic = 'Axon.IntegrationEvents', value_format='json');
+
+--@DeleteTopic
+create stream STR_INTEGRATIONEVENTS_AVRO
+WITH (
+    kafka_topic='INTEGRATIONEVENTS_AVRO',
+    value_format='AVRO',
+    PARTITIONS=6
+    )
+AS
+select
+    eventIdentifier,
+    eventType,
+    revision,
+    STRINGTOTIMESTAMP(timeStamp,'yyyy-MM-dd''T''HH:mm:ss.SSSX') eventTime,
+    payload
+from STR_INTEGRATIONEVENTS_JSON
+;
